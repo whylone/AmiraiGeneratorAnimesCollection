@@ -164,16 +164,13 @@
                     </section>
 
                     <section class="section">
-                        <h3>Заголовок слайда</h3>
-                        <div class="field">
-                            <input type="text" x-model="slide.heading" placeholder="Заголовок сверху" />
-                        </div>
+                        <h3>Шапка слайда</h3>
                         <div class="row" style="gap:16px;flex-wrap:wrap">
                             <label class="row" style="gap:6px;cursor:pointer">
                                 <input type="checkbox" x-model="slide.showLogo" /> Логотип
                             </label>
                             <label class="row" style="gap:6px;cursor:pointer">
-                                <input type="checkbox" x-model="slide.showUrl" /> URL
+                                <input type="checkbox" x-model="slide.showUrl" /> Сайт
                             </label>
                             <label class="row" style="gap:6px;cursor:pointer">
                                 <input type="checkbox" x-model="slide.showRank" /> Номера
@@ -193,19 +190,22 @@
                     </section>
 
                     <section class="section">
-                        <h3>Низ слайда (призыв + Telegram)</h3>
+                        <h3>Призыв сверху + Telegram снизу</h3>
                         <label class="row" style="gap:6px;cursor:pointer;margin-bottom:8px">
-                            <input type="checkbox" x-model="slide.showSides" @change="autoArrange()" /> Показывать нижнюю полосу
+                            <input type="checkbox" x-model="slide.showSides" @change="autoArrange()" /> Показывать
                         </label>
                         <div class="field">
-                            <label>Призыв (справа снизу)</label>
+                            <label>Призыв (сверху, над сайтом)</label>
                             <input type="text" x-model="slide.sideText" />
+                        </div>
+                        <div class="field">
+                            <label>Сайт (красным, сверху справа)</label>
+                            <input type="text" x-model="slide.siteUrl" />
                         </div>
                         <div class="field">
                             <label>Telegram (по центру снизу)</label>
                             <input type="text" x-model="slide.tgHandle" />
                         </div>
-                        <p class="hint">Под призывом красным показывается сайт (поле «Ссылка на сайт»).</p>
                     </section>
 
                     <section class="section">
@@ -345,10 +345,14 @@
                         </div>
                     </template>
 
-                    <!-- ЕДИНЫЙ БРЕНДБАР (логотип + URL) — одинаково на ВСЕХ слайдах -->
-                    <div class="brandbar" x-show="slide && (slide.showLogo || slide.showUrl)">
+                    <!-- ЕДИНЫЙ БРЕНДБАР: логотип слева, справа призыв (на гриде) + сайт -->
+                    <div class="brandbar" x-show="slide && (slide.showLogo || slide.showUrl || (slide.type==='grid' && slide.showSides))">
                         <img class="bb-logo" x-show="slide && slide.showLogo" src="/img/logo.png" alt="" />
-                        <div class="bb-url site-url" x-show="slide && slide.showUrl" x-text="slide.siteUrl"></div>
+                        <div class="bb-right">
+                            <div class="bb-cta" x-show="slide && slide.type==='grid' && slide.showSides"
+                                x-text="slide.sideText"></div>
+                            <div class="bb-url site-url" x-show="slide && slide.showUrl" x-text="slide.siteUrl"></div>
+                        </div>
                     </div>
 
                     <!-- ТИТУЛЬНЫЙ (обложка) -->
@@ -381,22 +385,15 @@
                     <!-- СЕТКА -->
                     <template x-if="slide && slide.type==='grid'">
                         <div style="position:absolute;inset:0">
-                            <div class="grid-heading">
-                                <h2 x-text="slide.heading"></h2>
-                            </div>
 
-                            <!-- нижняя полоса: Telegram по центру, призыв + сайт справа -->
+                            <!-- нижняя полоса: только Telegram по центру -->
                             <div class="grid-footer" x-show="slide.showSides">
                                 <div class="gf-tg">
                                     <svg class="tg-icon" viewBox="0 0 240 240" aria-hidden="true">
                                         <circle cx="120" cy="120" r="120" fill="#2AABEE" />
-                                        <path fill="#fff" d="M179 71 L154 175 c-2 8 -7 10 -14 6 l-39 -29 -19 18 c-2 2 -4 4 -8 4 l3 -43 78 -70 c3 -3 -1 -5 -5 -2 l-96 60 -41 -13 c-9 -3 -9 -9 2 -13 l161 -62 c7 -3 14 2 11 14 z" />
+                                        <path fill="#fff" d="M53.8 117.6c34.9-15.2 58.2-25.2 69.6-30.1 33.1-13.8 40-16.2 44.5-16.3 1 0 3.2.2 4.6 1.4 1.2 1 1.5 2.3 1.7 3.3.2 1 .4 3.1.2 4.9-1.8 18.9-9.6 64.8-13.6 86-1.7 9-5 12-8.2 12.3-7 .6-12.3-4.6-19-9-10.6-7-16.6-11.3-26.9-18.1-11.9-7.9-4.2-12.2 2.6-19.3 1.8-1.8 32.4-29.7 33-32.3.1-.3.1-1.5-.6-2.1-.7-.6-1.7-.4-2.5-.2-1.1.2-18.2 11.6-51.5 34-4.9 3.4-9.3 5-13.3 4.9-4.4-.1-12.8-2.5-19-4.5-7.7-2.5-13.8-3.8-13.2-8 .3-2.2 3.3-4.5 9-6.8z" />
                                     </svg>
                                     <span class="tg-handle" x-text="slide.tgHandle"></span>
-                                </div>
-                                <div class="gf-cta">
-                                    <div class="cta-text" x-text="slide.sideText"></div>
-                                    <div class="cta-url" x-text="slide.siteUrl"></div>
                                 </div>
                             </div>
 

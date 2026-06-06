@@ -626,16 +626,17 @@ input[type="color"] {
     overflow: hidden;
 }
 
-/* единый брендбар (логотип + URL) — ОДНА позиция на всех слайдах */
+/* единый брендбар (логотип + призыв/URL) — ОДНА позиция на всех слайдах */
 .brandbar {
     position: absolute;
     top: 52px;
     left: 56px;
     right: 56px;
-    height: 76px;
+    min-height: 76px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 24px;
     z-index: 30;
 }
 
@@ -645,12 +646,27 @@ input[type="color"] {
     object-fit: contain;
 }
 
-.brandbar .bb-url {
+.brandbar .bb-right {
+    text-align: right;
+}
+
+.brandbar .bb-cta {
     font-size: 30px;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+}
+
+.brandbar .bb-url {
+    font-size: 34px;
     font-weight: 900;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--brand);
+    line-height: 1;
 }
 
 .cover-number {
@@ -790,33 +806,6 @@ input[type="color"] {
     color: #fff;
     letter-spacing: 0.02em;
     white-space: nowrap;
-}
-
-/* призыв + красный сайт справа снизу */
-.gf-cta {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    text-align: right;
-}
-
-.gf-cta .cta-text {
-    font-size: 30px;
-    font-weight: 700;
-    color: #fff;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    line-height: 1.1;
-}
-
-.gf-cta .cta-url {
-    margin-top: 8px;
-    font-size: 38px;
-    font-weight: 900;
-    color: var(--brand);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    line-height: 1;
 }
 
 /* ---------- Арт (загруженная картинка) ---------- */
