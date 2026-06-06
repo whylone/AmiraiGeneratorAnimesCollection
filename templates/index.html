@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Amirai — генератор подборок аниме</title>
+    <link rel="icon" href="/img/logo180.png" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <script defer src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='vendor/html-to-image.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='vendor/alpine.min.js') }}"></script>
+</head>
+
+<body x-data="editor()" x-cloak>
+    <div class="app">
+
+        <!-- ================= ВЕРХНЯЯ ПАНЕЛЬ ================= -->
+        <header class="topbar">
+            <div class="brand">
+                <img src="/img/logo.png" alt="amiria" />
+                <span>Amirai <small>подборки</small></span>
+            </div>
+
+            <div class="topbar-spacer"></div>
+
+            <div class="seg" title="Формат картинки">
+                <button :class="{active: format==='9:16'}" @click="setFormat('9:16')">9:16 TikTok</button>
+                <button :class="{active: format==='1:1'}" @click="setFormat('1:1')">1:1 пост</button>
+            </div>
+
+            <button class="btn" @click="exportCurrent()" :disabled="exporting">⬇ Слайд</button>
+            <button class="btn btn-primary" @click="exportAll()" :disabled="exporting">
+                <template x-if="exporting"><span class="spinner"></span></template>
+                <span x-text="exporting ? 'Рендер…' : '⬇ Скачать всё'"></span>
+            </button>
+        </header>
+
+        <!-- ================= САЙДБАР ================= -->
+        <aside class="sidebar">
+
+            <!-- общие настройки сетки -->
+            <section class="section">
+                <h3>Сетка и привязка</h3>
+                <div class="row" style="justify-content:space-between">
+                    <label class="row" style="gap:6px;cursor:pointer">
+                        <input type="checkbox" x-model="snap" /> Привязка к сетке
+                    </label>
+                    <label class="row" style="gap:6px;cursor:pointer">
+                        <input type="checkbox" x-model="showGrid" /> Показать сетку
+                    </label>
+                </div>
+                <div class="field" style="margin-top:10px">
+                    <label>Шаг сетки: <span x-text="gridSize"></span> px</label>
+                    <input type="range" min="10" max="120" step="5" x-model.number="gridSize" />
+                </div>
+            </section>
+
+            <!-- ====== НАСТРОЙКИ ТИТУЛЬНОГО СЛАЙДА ====== -->
+            <template x-if="slide && slide.type==='title'">
+                <section class="section">
+                    <h3>Титульный слайд</h3>
+                    <div class="field">
+                        <label>Название подборки</label>
+                        <textarea x-model="slide.title"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>Подзаголовок</label>
+                        <input type="text" x-model="slide.subtitle" />
+                    </div>
+                    <div class="field">
+                        <label>Ссылка на сайт (внизу)</label>
+                        <input type="text" x-model="slide.siteUrl" />
+                    </div>
+                    <div class="row" style="gap:16px">
+                        <label class="row" style="gap:6px;cursor:pointer">
+                            <input type="checkbox" x-model="slide.showLogo" /> Логотип
+                        </label>
+                        <label class="row" style="gap:6px;cursor:pointer">
+                            <input type="checkbox" x-model="slide.showUrl" /> URL
+                        </label>
+                    </div>
+                    <div class="field" style="margin-top:10px">
+                        <label>Фон</label>
+                        <select x-model="slide.bg">
+                            <template x-for="(val,name) in bgPresets" :key="name">
+                                <option :value="val" x-text="name"></option>
+                            </template>
+                        </select>
+                    </div>
+                </section>
+            </template>
+
+            <!-- ====== НАСТРОЙКИ СЛАЙДА-СЕТКИ ====== -->
+            <template x-if="slide && slide.type==='grid'">
+                <div style="display:flex;flex-direction:column;gap:14px">
+
+                    <section class="section">
+                        <h3>Поиск аниме (Shikimori)</h3>
+                        <form @submit.prevent="search()" class="row">
+                            <input type="search" placeholder="Напр. Наруто, Магическая битва…"
+                                x-model="query" />
+                            <button class="btn btn-primary" type="submit">Найти</button>
+                        </form>
+                        <p class="hint" x-show="searchError" x-text="searchError" style="color:var(--brand-soft)"></p>
+                        <p class="hint" x-show="searching"><span class="spinner"></span> Ищу…</p>
+
+                        <div class="search-results" x-show="results.length">
+                            <template x-for="r in results" :key="r.id">
+                                <div class="result" @click="addCard(r)" :title="r.russian">
+                                    <img :src="'/api/image?url='+encodeURIComponent(r.poster_preview||r.poster_original)"
+                                        loading="lazy" alt="" />
+                                    <div class="add-badge">+</div>
+                                    <div class="result-name" x-text="r.russian"></div>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="hint">Клик по постеру — добавить карточку на слайд.</p>
+                    </section>
+
+                    <section class="section">
+                        <h3>Заголовок слайда</h3>
+                        <div class="field">
+                            <input type="text" x-model="slide.heading" placeholder="Заголовок сверху" />
+                        </div>
+                        <div class="row" style="gap:16px;flex-wrap:wrap">
+                            <label class="row" style="gap:6px;cursor:pointer">
+                                <input type="checkbox" x-model="slide.showLogo" /> Логотип
+                            </label>
+                            <label class="row" style="gap:6px;cursor:pointer">
+                                <input type="checkbox" x-model="slide.showUrl" /> URL
+                            </label>
+                            <label class="row" style="gap:6px;cursor:pointer">
+                                <input type="checkbox" x-model="slide.showRank" /> Номера
+                            </label>
+                            <label class="row" style="gap:6px;cursor:pointer">
+                                <input type="checkbox" x-model="slide.showCaption" @change="autoArrange()" /> Названия
+                            </label>
+                        </div>
+                        <div class="field" style="margin-top:10px">
+                            <label>Фон</label>
+                            <select x-model="slide.bg">
+                                <template x-for="(val,name) in bgPresets" :key="name">
+                                    <option :value="val" x-text="name"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </section>
+
+                    <section class="section">
+                        <h3>Раскладка</h3>
+                        <div class="field">
+                            <label>Колонок: <span x-text="slide.cols"></span></label>
+                            <input type="range" min="1" max="4" step="1" x-model.number="slide.cols"
+                                @input="autoArrange()" />
+                        </div>
+                        <div class="field">
+                            <label>Отступ между: <span x-text="slide.gap"></span> px</label>
+                            <input type="range" min="0" max="120" step="4" x-model.number="slide.gap"
+                                @input="autoArrange()" />
+                        </div>
+                        <div class="field">
+                            <label>Поля по краям: <span x-text="slide.pad"></span> px</label>
+                            <input type="range" min="0" max="160" step="4" x-model.number="slide.pad"
+                                @input="autoArrange()" />
+                        </div>
+                        <div class="field">
+                            <label>Отступ под шапкой: <span x-text="slide.headerH"></span> px</label>
+                            <input type="range" min="0" max="500" step="10" x-model.number="slide.headerH"
+                                @input="autoArrange()" />
+                        </div>
+                        <button class="btn" style="width:100%" @click="autoArrange()">⊞ Разложить по сетке</button>
+                        <p class="hint">Карточки можно свободно двигать мышкой — они прилипают к сетке. Угол карточки тянет за размер.</p>
+                    </section>
+
+                    <section class="section" x-show="slide.cards.length">
+                        <h3>Карточки (<span x-text="slide.cards.length"></span>)</h3>
+                        <div class="card-list">
+                            <template x-for="(c,idx) in slide.cards" :key="c.uid">
+                                <div class="card-row" :class="{selected: c.uid===selectedCardUid}"
+                                    @click="selectCard(c.uid)">
+                                    <span class="muted" x-text="idx+1"></span>
+                                    <img :src="c.poster" alt="" />
+                                    <input type="text" x-model="c.name" @click.stop />
+                                    <button class="btn btn-icon btn-sm" @click.stop="removeCard(c.uid)" title="Удалить">✕</button>
+                                </div>
+                            </template>
+                        </div>
+                    </section>
+
+                    <template x-if="selectedCard">
+                        <section class="section">
+                            <h3>Выбранная карточка</h3>
+                            <div class="field">
+                                <label>Размер: <span x-text="selectedCard ? Math.round(selectedCard.w) : ''"></span> px</label>
+                                <input type="range" min="140" max="900" step="10"
+                                    :value="selectedCard ? selectedCard.w : 200"
+                                    @input="selectedCard && (selectedCard.w = parseInt($event.target.value))" />
+                            </div>
+                        </section>
+                    </template>
+                </div>
+            </template>
+        </aside>
+
+        <!-- ================= СЦЕНА ================= -->
+        <main class="stage">
+            <div class="stage-toolbar">
+                <button class="btn btn-sm" @click="duplicateSlide()">⧉ Дублировать слайд</button>
+                <button class="btn btn-sm" @click="moveSlide(current,-1)" :disabled="current===0">← Влево</button>
+                <button class="btn btn-sm" @click="moveSlide(current,1)"
+                    :disabled="current===slides.length-1">Вправо →</button>
+                <div class="topbar-spacer"></div>
+                <span class="muted">Слайд <span x-text="current+1"></span> / <span x-text="slides.length"></span>
+                    · <span x-text="dims.w + '×' + dims.h"></span></span>
+            </div>
+
+            <div class="stage-canvas-wrap" x-ref="canvasWrap" @pointerdown.self="selectedCardUid=null">
+
+                <!-- ПОЛНОРАЗМЕРНЫЙ СЛАЙД -->
+                <div class="slide" x-ref="slideNode" :class="{exporting: exporting}"
+                    :style="`width:${dims.w}px;height:${dims.h}px;` +
+                            `transform:translate(-50%,-50%) scale(${scale});` +
+                            `background:${slide ? slide.bg : '#111'};`">
+
+                    <!-- сетка -->
+                    <div class="grid-overlay" x-show="showGrid && !exporting"
+                        :style="`background:${gridBg}`"></div>
+
+                    <!-- ТИТУЛЬНЫЙ -->
+                    <template x-if="slide && slide.type==='title'">
+                        <div class="slide-title">
+                            <img class="logo" x-show="slide.showLogo" src="/img/logo.png" alt="" />
+                            <h1 x-text="slide.title"></h1>
+                            <div class="subtitle" x-show="slide.subtitle" x-text="slide.subtitle"></div>
+                            <div class="site-url" x-show="slide.showUrl" x-text="slide.siteUrl"></div>
+                        </div>
+                    </template>
+
+                    <!-- СЕТКА -->
+                    <template x-if="slide && slide.type==='grid'">
+                        <div style="position:absolute;inset:0">
+                            <div class="slide-header">
+                                <img x-show="slide.showLogo" src="/img/logo.png" alt="" />
+                                <div class="h-text">
+                                    <h2 x-text="slide.heading"></h2>
+                                </div>
+                                <div class="site-url" x-show="slide.showUrl" x-text="slide.siteUrl"></div>
+                            </div>
+
+                            <template x-for="(c,idx) in slide.cards" :key="c.uid">
+                                <div class="acard"
+                                    :class="{selected: c.uid===selectedCardUid, dragging: dragInfo && dragInfo.card===c}"
+                                    :style="`left:${c.x}px;top:${c.y}px;width:${c.w}px`"
+                                    @pointerdown.stop="startDrag($event, c, 'move')">
+                                    <div class="rank" x-show="slide.showRank"
+                                        :style="`font-size:${c.w*0.16}px;min-width:${c.w*0.2}px;height:${c.w*0.2}px`"
+                                        x-text="idx+1"></div>
+                                    <img class="poster" :src="c.poster" alt="" crossorigin="anonymous" />
+                                    <div class="caption" x-show="slide.showCaption"
+                                        :style="`height:${c.w*0.22}px;font-size:${Math.round(c.w*0.085)}px`"
+                                        x-text="c.name"></div>
+                                    <div class="resize-handle"
+                                        @pointerdown.stop="startDrag($event, c, 'resize')"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- ================= ЛЕНТА СЛАЙДОВ ================= -->
+            <div class="slides-strip">
+                <template x-for="(s,i) in slides" :key="s.id">
+                    <div class="thumb" :class="{active: i===current}" @click="selectSlide(i)"
+                        :style="`aspect-ratio:${dims.w}/${dims.h}`">
+                        <span class="thumb-index" x-text="(i+1) + (s.type==='title' ? ' · титул' : '')"></span>
+                        <button class="thumb-del" @click.stop="removeSlide(i)">✕</button>
+                        <span x-text="s.type==='grid' ? (s.cards.length + ' аниме') : 'титул'"></span>
+                    </div>
+                </template>
+                <button class="add-slide" @click="addSlide('grid')">+ Сетка</button>
+                <button class="add-slide" @click="addSlide('title')">+ Титул</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- toast -->
+    <div class="toast" x-show="toast" x-transition x-text="toast"></div>
+</body>
+</html>
