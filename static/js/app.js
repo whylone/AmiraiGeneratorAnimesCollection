@@ -32,6 +32,11 @@ const SKETCH_PATHS = {
 
 let _uid = 0;
 const uid = () => ++_uid;
+const bumpUid = (n) => {
+    if (typeof n === "number" && n > _uid) _uid = n;
+};
+
+const STORAGE_KEY = "amirai-podborka-v1";
 
 // Проксированный URL постера (чтобы canvas не «портился» CORS-ом).
 const proxied = (url) => (url ? "/api/image?url=" + encodeURIComponent(url) : "");
@@ -83,19 +88,111 @@ function editor() {
 
         bgPresets: BG_PRESETS,
 
+        // автосохранение
+        _saveTimer: null,
+        _pending: null,
+        saved: false,
+
         // ------------------------------------------------------
         init() {
-            // Стартовый набор: титульный слайд + один слайд-сетка.
-            this.slides = [
-                this.makeTitleSlide("Топ аниме которые стоит посмотреть", "подборка от amiria.online"),
-                this.makeGridSlide(),
-            ];
-            this.current = 0;
+            if (!this.loadFromStorage()) {
+                // Стартовый набор: титульный слайд + один слайд-сетка.
+                this.slides = [
+                    this.makeTitleSlide("Топ аниме которые стоит посмотреть", "подборка от amiria.online"),
+                    this.makeGridSlide(),
+                ];
+                this.current = 0;
+            }
             this.$nextTick(() => this.fitStage());
             window.addEventListener("resize", () => this.fitStage());
             // глобальные обработчики drag
             window.addEventListener("pointermove", (e) => this.onPointerMove(e));
             window.addEventListener("pointerup", () => this.onPointerUp());
+
+            // автосохранение: реактивный эффект следит за состоянием и пишет в
+            // localStorage с задержкой (debounce). Во время перетаскивания не
+            // сериализуем состояние (иначе лаги) — сохраним по отпусканию.
+            this.$nextTick(() => {
+                Alpine.effect(() => {
+                    if (this.dragInfo) return; // тянем карточку — пропускаем
+                    const snapshot = JSON.stringify(this.persistState());
+                    this.scheduleSave(snapshot);
+                });
+            });
+            // успеть сохранить перед закрытием вкладки
+            window.addEventListener("beforeunload", () => this.saveNow());
+        },
+
+        // ---- автосохранение ----
+        persistState() {
+            return {
+                v: 1,
+                format: this.format,
+                current: this.current,
+                gridSize: this.gridSize,
+                snap: this.snap,
+                showGrid: this.showGrid,
+                slides: this.slides,
+            };
+        },
+
+        scheduleSave(snapshot) {
+            this._pending = snapshot;
+            clearTimeout(this._saveTimer);
+            this._saveTimer = setTimeout(() => this.saveNow(), 500);
+        },
+
+        saveNow() {
+            try {
+                localStorage.setItem(STORAGE_KEY, this._pending || JSON.stringify(this.persistState()));
+                this.saved = true;
+            } catch (e) {
+                // обычно превышение квоты из-за тяжёлых артов
+                this.toast = "Не удалось сохранить (возможно, слишком много/тяжёлых артов)";
+                setTimeout(() => (this.toast = ""), 3000);
+            }
+        },
+
+        loadFromStorage() {
+            let data;
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return false;
+                data = JSON.parse(raw);
+            } catch (e) {
+                return false;
+            }
+            if (!data || !Array.isArray(data.slides) || !data.slides.length) return false;
+
+            this.slides = data.slides;
+            this.format = data.format || "9:16";
+            this.current = Math.min(data.current || 0, this.slides.length - 1);
+            if (typeof data.gridSize === "number") this.gridSize = data.gridSize;
+            if (typeof data.snap === "boolean") this.snap = data.snap;
+            if (typeof data.showGrid === "boolean") this.showGrid = data.showGrid;
+
+            // сдвинуть счётчик uid выше всех загруженных id
+            this.slides.forEach((s) => {
+                bumpUid(s.id);
+                (s.cards || []).forEach((c) => bumpUid(c.uid));
+                (s.arts || []).forEach((a) => bumpUid(a.uid));
+            });
+            return true;
+        },
+
+        resetAll() {
+            if (!confirm("Сбросить все слайды и начать заново? Текущая работа удалится.")) return;
+            try {
+                localStorage.removeItem(STORAGE_KEY);
+            } catch (e) {}
+            this.slides = [
+                this.makeTitleSlide("Топ аниме которые стоит посмотреть", "подборка от amiria.online"),
+                this.makeGridSlide(),
+            ];
+            this.current = 0;
+            this.selectedCardUid = null;
+            this.selectedArtUid = null;
+            this.$nextTick(() => this.fitStage());
         },
 
         // ---- фабрики слайдов ----
