@@ -37,7 +37,7 @@ SHIKIMORI_API = f"{SHIKIMORI_BASE}/api"
 
 # Shikimori ТРЕБУЕТ внятный User-Agent и банит дефолтные python-requests/curl.
 # Назовём приложение по имени проекта.
-USER_AGENT = "AmiraiPodborka/1.0 (https://amiria.online)"
+USER_AGENT = "AmiraiPodborka/1.0 (https://amirai.online)"
 
 # Хосты, картинки с которых разрешено проксировать (защита от open-proxy).
 ALLOWED_IMAGE_HOSTS = {
