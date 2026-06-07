@@ -1,7 +1,7 @@
 # Amirai — генератор картинок-подборок аниме
 
 Локальное веб-приложение для создания картинок-подборок аниме под TikTok / Reels / Shorts
-и продвижения сайта **amiria.online**. Данные и постеры берутся из **Shikimori API**.
+и продвижения сайта **amirai.online**. Данные и постеры берутся из **Shikimori API**.
 Базы данных нет — всё работает через API в реальном времени.
 
 ## Возможности
@@ -62,7 +62,7 @@ templates/index.html    Редактор (разметка + Alpine-биндин
 static/css/style.css    Тёмная тема, красный акцент бренда
 static/js/app.js        Логика редактора: слайды, drag/snap, экспорт
 static/vendor/          alpine.min.js, html-to-image.js (локально)
-static/img/             Логотипы amiria
+static/img/             Логотипы amirai
 images/                 Исходные логотипы
 ```
 

@@ -98,7 +98,7 @@ function editor() {
             if (!this.loadFromStorage()) {
                 // Стартовый набор: титульный слайд + один слайд-сетка.
                 this.slides = [
-                    this.makeTitleSlide("Топ аниме которые стоит посмотреть", "подборка от amiria.online"),
+                    this.makeTitleSlide("Топ аниме которые стоит посмотреть", "подборка от amirai.online"),
                     this.makeGridSlide(),
                 ];
                 this.current = 0;
@@ -186,7 +186,7 @@ function editor() {
                 localStorage.removeItem(STORAGE_KEY);
             } catch (e) {}
             this.slides = [
-                this.makeTitleSlide("Топ аниме которые стоит посмотреть", "подборка от amiria.online"),
+                this.makeTitleSlide("Топ аниме которые стоит посмотреть", "подборка от amirai.online"),
                 this.makeGridSlide(),
             ];
             this.current = 0;
@@ -204,7 +204,7 @@ function editor() {
                 subtitle,
                 showLogo: true,
                 showUrl: true,
-                siteUrl: "amiria.online",
+                siteUrl: "amirai.online",
                 bg: BG_PRESETS["Чёрный (бренд)"],
                 // крупная цифра-обложка
                 showNumber: true,
@@ -223,7 +223,7 @@ function editor() {
                 heading,
                 showLogo: true,
                 showUrl: true,
-                siteUrl: "amiria.online",
+                siteUrl: "amirai.online",
                 showRank: true,
                 showCaption: true,
                 bg: BG_PRESETS["Чёрный (бренд)"],
@@ -620,7 +620,7 @@ function editor() {
 
         // ---- слайды ----
         addSlide(type) {
-            const s = type === "title" ? this.makeTitleSlide("Заголовок", "amiria.online") : this.makeGridSlide();
+            const s = type === "title" ? this.makeTitleSlide("Заголовок", "amirai.online") : this.makeGridSlide();
             this.slides.push(s);
             this.current = this.slides.length - 1;
             this.$nextTick(() => this.fitStage());
