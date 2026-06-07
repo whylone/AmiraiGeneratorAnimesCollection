@@ -164,6 +164,12 @@ function editor() {
             }
             if (!data || !Array.isArray(data.slides) || !data.slides.length) return false;
 
+            // Миграция: чиним старую опечатку в домене (amiria.online → amirai.online),
+            // которая могла попасть в сохранённые слайды до фикса.
+            data.slides = JSON.parse(
+                JSON.stringify(data.slides).replace(/amiria\.online/gi, "amirai.online")
+            );
+
             this.slides = data.slides;
             this.format = data.format || "9:16";
             this.current = Math.min(data.current || 0, this.slides.length - 1);
