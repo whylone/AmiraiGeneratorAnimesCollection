@@ -41,23 +41,6 @@
         <!-- ================= САЙДБАР ================= -->
         <aside class="sidebar">
 
-            <!-- общие настройки сетки -->
-            <section class="section">
-                <h3>Сетка и привязка</h3>
-                <div class="row" style="justify-content:space-between">
-                    <label class="row" style="gap:6px;cursor:pointer">
-                        <input type="checkbox" x-model="snap" /> Привязка к сетке
-                    </label>
-                    <label class="row" style="gap:6px;cursor:pointer">
-                        <input type="checkbox" x-model="showGrid" /> Показать сетку
-                    </label>
-                </div>
-                <div class="field" style="margin-top:10px">
-                    <label>Шаг сетки: <span x-text="gridSize"></span> px</label>
-                    <input type="range" min="10" max="120" step="5" x-model.number="gridSize" />
-                </div>
-            </section>
-
             <!-- ====== НАСТРОЙКИ ТИТУЛЬНОГО СЛАЙДА ====== -->
             <template x-if="slide && slide.type==='title'">
                 <div style="display:flex;flex-direction:column;gap:14px">
@@ -157,17 +140,22 @@
                         <p class="hint" x-show="searchError" x-text="searchError" style="color:var(--brand-soft)"></p>
                         <p class="hint" x-show="searching"><span class="spinner"></span> Ищу…</p>
 
+                        <div class="replace-banner" x-show="replaceCardUid">
+                            <span>🔄 Режим замены — выберите аниме</span>
+                            <button class="btn btn-icon btn-sm" @click="cancelReplace()" title="Отменить">✕</button>
+                        </div>
+
                         <div class="search-results" x-show="results.length">
                             <template x-for="r in results" :key="r.id">
-                                <div class="result" @click="addCard(r)" :title="r.russian">
+                                <div class="result" @click="pickAnime(r)" :title="r.russian">
                                     <img :src="'/api/image?url='+encodeURIComponent(r.poster_preview||r.poster_original)"
                                         loading="lazy" alt="" />
-                                    <div class="add-badge">+</div>
+                                    <div class="add-badge" x-text="replaceCardUid ? '🔄' : '+'"></div>
                                     <div class="result-name" x-text="r.russian"></div>
                                 </div>
                             </template>
                         </div>
-                        <p class="hint">Клик по постеру — добавить карточку на слайд.</p>
+                        <p class="hint">Клик по постеру — добавить карточку. ПКМ по карточке на слайде — заменить аниме.</p>
                     </section>
 
                     <section class="section">
@@ -197,9 +185,9 @@
                     </section>
 
                     <section class="section">
-                        <h3>Призыв сверху + Telegram снизу</h3>
+                        <h3>Призыв и сайт (сверху)</h3>
                         <label class="row" style="gap:6px;cursor:pointer;margin-bottom:8px">
-                            <input type="checkbox" x-model="slide.showSides" @change="autoArrange()" /> Показывать
+                            <input type="checkbox" x-model="slide.showSides" /> Показывать призыв
                         </label>
                         <div class="field">
                             <label>Призыв (сверху, над сайтом)</label>
@@ -208,10 +196,6 @@
                         <div class="field">
                             <label>Сайт (красным, сверху справа)</label>
                             <input type="text" x-model="slide.siteUrl" />
-                        </div>
-                        <div class="field">
-                            <label>Telegram (по центру снизу)</label>
-                            <input type="text" x-model="slide.tgHandle" />
                         </div>
                     </section>
 
@@ -238,8 +222,8 @@
                             <input type="range" min="0" max="500" step="10" x-model.number="slide.headerH"
                                 @input="autoArrange()" />
                         </div>
-                        <button class="btn" style="width:100%" @click="autoArrange()">⊞ Разложить по сетке</button>
-                        <p class="hint">Карточки двигаются мышкой и прилипают к сетке, не наезжая друг на друга. Угол тянет за размер.</p>
+                        <button class="btn btn-primary" style="width:100%" @click="autoArrange()">⊞ Выровнять ровно по центру</button>
+                        <p class="hint">Карточки выравниваются идеально ровно: ряды по центру, равные отступы, одинаковый размер. Между выравниваниями двигаются мышкой свободно, угол тянет за размер.</p>
                     </section>
 
                     <section class="section" x-show="slide.cards.length">
@@ -258,6 +242,8 @@
                                         @click.stop draggable="false" title="Номер на карточке (можно менять)" />
                                     <img :src="c.poster" alt="" draggable="false" />
                                     <input type="text" x-model="c.name" @click.stop draggable="false" />
+                                    <button class="btn btn-icon btn-sm" @click.stop="startReplace(c.uid)"
+                                        :class="{'btn-primary': c.uid===replaceCardUid}" title="Заменить аниме (поиск)">🔄</button>
                                     <button class="btn btn-icon btn-sm" @click.stop="removeCard(c.uid)" title="Удалить">✕</button>
                                 </div>
                             </template>
@@ -391,22 +377,12 @@
                     <template x-if="slide && slide.type==='grid'">
                         <div style="position:absolute;inset:0">
 
-                            <!-- нижняя полоса: только Telegram по центру -->
-                            <div class="grid-footer" x-show="slide.showSides">
-                                <div class="gf-tg">
-                                    <svg class="tg-icon" viewBox="0 0 240 240" aria-hidden="true">
-                                        <circle cx="120" cy="120" r="120" fill="#2AABEE" />
-                                        <path fill="#fff" d="M53.8 117.6c34.9-15.2 58.2-25.2 69.6-30.1 33.1-13.8 40-16.2 44.5-16.3 1 0 3.2.2 4.6 1.4 1.2 1 1.5 2.3 1.7 3.3.2 1 .4 3.1.2 4.9-1.8 18.9-9.6 64.8-13.6 86-1.7 9-5 12-8.2 12.3-7 .6-12.3-4.6-19-9-10.6-7-16.6-11.3-26.9-18.1-11.9-7.9-4.2-12.2 2.6-19.3 1.8-1.8 32.4-29.7 33-32.3.1-.3.1-1.5-.6-2.1-.7-.6-1.7-.4-2.5-.2-1.1.2-18.2 11.6-51.5 34-4.9 3.4-9.3 5-13.3 4.9-4.4-.1-12.8-2.5-19-4.5-7.7-2.5-13.8-3.8-13.2-8 .3-2.2 3.3-4.5 9-6.8z" />
-                                    </svg>
-                                    <span class="tg-handle" x-text="slide.tgHandle"></span>
-                                </div>
-                            </div>
-
                             <template x-for="(c,idx) in slide.cards" :key="c.uid">
                                 <div class="acard"
                                     :class="{selected: c.uid===selectedCardUid, dragging: dragInfo && dragInfo.obj===c}"
                                     :style="`left:${c.x}px;top:${c.y}px;width:${c.w}px`"
-                                    @pointerdown.stop="startDrag($event, c, 'move')">
+                                    @pointerdown.stop="startDrag($event, c, 'move')"
+                                    @contextmenu.prevent="startReplace(c.uid)">
                                     <div class="rank" x-show="slide.showRank"
                                         :style="`font-size:${c.w*0.16}px;min-width:${c.w*0.2}px;height:${c.w*0.2}px`"
                                         x-text="c.rank != null ? c.rank : (idx+1)"></div>
@@ -421,12 +397,6 @@
                         </div>
                     </template>
                 </div>
-
-                <!-- сетка поверх слайда: позиция/размер берутся из реально
-                     измеренного rect слайда → линии точно совпадают с его
-                     координатами и краями карточек; в экспорт не попадает -->
-                <div class="grid-overlay-screen" x-show="showGrid"
-                    :style="`left:${slideRect.left}px;top:${slideRect.top}px;width:${slideRect.w}px;height:${slideRect.h}px;background:${gridBgScreen}`"></div>
             </div>
 
             <!-- ================= ЛЕНТА СЛАЙДОВ ================= -->
