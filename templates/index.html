@@ -106,7 +106,8 @@
                                 <div class="rank" x-show="slide.showRank"
                                     :style="`font-size:${c.w*0.16}px;min-width:${c.w*0.2}px;height:${c.w*0.2}px`"
                                     x-text="c.rank != null ? c.rank : (idx+1)"></div>
-                                <img class="poster" :src="c.poster" alt="" crossorigin="anonymous" />
+                                <img class="poster" :src="c.poster" alt=""
+                                    :crossorigin="isNative ? null : 'anonymous'" />
                                 <div class="caption" x-show="slide.showCaption"
                                     :style="captionStyle(c)"
                                     x-text="c.name"></div>
