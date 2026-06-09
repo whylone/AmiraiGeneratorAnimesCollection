@@ -41,9 +41,63 @@ const bumpUid = (n) => {
 const STORAGE_KEY = "amirai-podborka-v2";
 const MAX_CARDS = 6; // максимум карточек на одном слайде
 const MAX_COLS = 3; // максимум карточек в ширину
+// Высота подписи под постером = ширина карточки × этот коэффициент.
+// Запас под 2-3 строки длинных названий, чтобы текст не вылезал на постер.
+const CAP_FACTOR = 0.3;
+const CAP_FONT_FACTOR = 0.072; // размер шрифта подписи = ширина × этот коэффициент
 
-// Проксированный URL постера (чтобы canvas не «портился» CORS-ом).
-const proxied = (url) => (url ? "/api/image?url=" + encodeURIComponent(url) : "");
+// --- Сетевой слой: две среды ----------------------------------------------
+// 1) Flask-веб (десктоп/PWA): ходим через прокси /api/* (нужен UA + CORS).
+// 2) Android-APK (Capacitor): сервера нет — стучимся в Shikimori напрямую
+//    нативным HTTP (CapacitorHttp минует CORS и позволяет задать User-Agent).
+const IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const SHIKI = "https://shikimori.one";
+const SHIKI_UA = "AmiraiPodborka/1.0 (https://amirai.online)";
+
+// относительный путь картинки Shikimori → абсолютный URL
+const absImg = (u) => (!u ? null : /^https?:\/\//.test(u) ? u : SHIKI + u);
+
+// URL постера для показа/экспорта.
+// В вебе — через прокси (иначе canvas «портится» CORS-ом и PNG не снять).
+// В нативе — прямой URL (html-to-image встроит его нативным fetch без CORS).
+const proxied = (url) => {
+    if (!url) return "";
+    return IS_NATIVE ? url : "/api/image?url=" + encodeURIComponent(url);
+};
+
+// нормализация ответа Shikimori к форме, которую ждёт фронт
+const serializeAnime = (item) => {
+    const image = item.image || {};
+    return {
+        id: item.id,
+        name: item.name,
+        russian: item.russian || item.name,
+        kind: item.kind,
+        score: item.score,
+        poster_original: absImg(image.original),
+        poster_preview: absImg(image.preview),
+    };
+};
+
+// Поиск аниме: нативно — прямой запрос к Shikimori, в вебе — через Flask-прокси.
+async function searchAnime(q, limit = 24) {
+    if (IS_NATIVE) {
+        const http = window.CapacitorHttp || (window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp);
+        const res = await http.request({
+            method: "GET",
+            url: SHIKI + "/api/animes",
+            params: { search: q, limit: String(limit), order: "popularity" },
+            headers: { "User-Agent": SHIKI_UA, Accept: "application/json" },
+        });
+        const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+        if (!Array.isArray(data)) throw new Error("Shikimori вернул неожиданный ответ");
+        return data.map(serializeAnime);
+    }
+    const r = await fetch("/api/search?limit=" + limit + "&q=" + encodeURIComponent(q));
+    const data = await r.json();
+    if (data && data.error) throw new Error(data.error);
+    return data;
+}
 
 function preload(src) {
     return new Promise((resolve) => {
@@ -63,6 +117,9 @@ function editor() {
         slides: [],
         current: 0,
         scale: 1,
+
+        // активная вкладка нижней панели (мобильный интерфейс)
+        tab: "search",
 
         // единая ширина карточек для ВСЕХ грид-слайдов
         globalCardW: 300,
@@ -111,6 +168,7 @@ function editor() {
                 ];
                 this.current = 0;
             }
+            this.ensureValidTab();
             this.$nextTick(() => this.fitStage());
             window.addEventListener("resize", () => this.fitStage());
             // глобальные обработчики drag
@@ -211,6 +269,9 @@ function editor() {
                 (s.cards || []).forEach((c) => bumpUid(c.uid));
                 (s.arts || []).forEach((a) => bumpUid(a.uid));
             });
+            // Пересобрать раскладку под новую высоту подписи: старые сохранения
+            // считали ряды от меньшей высоты, иначе строки наезжали бы друг на друга.
+            this.layoutAll(this.globalCardW);
             return true;
         },
 
@@ -290,6 +351,33 @@ function editor() {
             return this.slides[this.current];
         },
 
+        // ---- нижние вкладки (мобильный интерфейс) ----
+        // Набор вкладок зависит от типа слайда. Арт и экспорт — общие.
+        get tabs() {
+            if (!this.slide) return [];
+            if (this.slide.type === "title") {
+                return [
+                    { id: "cover", label: "Цифра", icon: "①" },
+                    { id: "text", label: "Текст", icon: "T" },
+                    { id: "art", label: "Арт", icon: "🖼" },
+                    { id: "export", label: "Экспорт", icon: "⬇" },
+                ];
+            }
+            return [
+                { id: "search", label: "Поиск", icon: "🔍" },
+                { id: "cards", label: "Карточки", icon: "▦" },
+                { id: "style", label: "Стиль", icon: "🎨" },
+                { id: "art", label: "Арт", icon: "🖼" },
+                { id: "export", label: "Экспорт", icon: "⬇" },
+            ];
+        },
+
+        // если текущая вкладка недоступна для этого слайда — переключиться на первую
+        ensureValidTab() {
+            const ids = this.tabs.map((t) => t.id);
+            if (!ids.includes(this.tab)) this.tab = ids[0] || "export";
+        },
+
         // ---- масштаб сцены ----
         fitStage() {
             const wrap = this.$refs.canvasWrap;
@@ -318,19 +406,18 @@ function editor() {
             this.searching = true;
             this.searchError = "";
             try {
-                const r = await fetch("/api/search?limit=24&q=" + encodeURIComponent(q));
-                const data = await r.json();
-                if (data.error) {
-                    this.searchError = data.error;
-                    this.results = [];
-                } else {
-                    this.results = data;
-                }
+                this.results = await searchAnime(q, 24);
             } catch (e) {
-                this.searchError = "Ошибка сети: " + e.message;
+                this.searchError = "Ошибка поиска: " + (e && e.message ? e.message : e);
+                this.results = [];
             } finally {
                 this.searching = false;
             }
+        },
+
+        // URL миниатюры для результата поиска (через прокси в вебе / прямой в нативе)
+        thumb(anime) {
+            return proxied(anime.poster_preview || anime.poster_original);
         },
 
         // ---- работа с карточками ----
@@ -406,6 +493,19 @@ function editor() {
             this.showToast("Карточка заменена");
         },
 
+        // Заменить постер карточки своим изображением (когда у Shikimori заглушка 404).
+        // Храним как data-URL: рисуется в PNG напрямую, прокси/CORS не нужны.
+        setCardPoster(card, fileList) {
+            const file = Array.from(fileList || []).find((f) => f.type.startsWith("image/"));
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                card.poster = ev.target.result;
+                card.customPoster = true;
+            };
+            reader.readAsDataURL(file);
+        },
+
         removeCard(cardUid) {
             const s = this.slide;
             s.cards = s.cards.filter((c) => c.uid !== cardUid);
@@ -450,8 +550,13 @@ function editor() {
 
         cardHeight(card, slide) {
             const posterH = card.w * 1.5;
-            const cap = (slide || this.slide).showCaption ? card.w * 0.22 : 0;
+            const cap = (slide || this.slide).showCaption ? card.w * CAP_FACTOR : 0;
             return posterH + cap;
+        },
+
+        // inline-стиль подписи карточки (высота + размер шрифта от ширины карточки)
+        captionStyle(card) {
+            return `height:${card.w * CAP_FACTOR}px;font-size:${Math.round(card.w * CAP_FONT_FACTOR)}px`;
         },
 
         bringFront(card) {
@@ -527,7 +632,7 @@ function editor() {
 
         // высота карточки относительно её ширины (постер 2:3 + подпись)
         cardHFactor(s) {
-            return 1.5 + (s.showCaption ? 0.22 : 0);
+            return 1.5 + (s.showCaption ? CAP_FACTOR : 0);
         },
 
         // Колонки считаются автоматически по числу карточек:
@@ -788,6 +893,7 @@ function editor() {
             const s = type === "title" ? this.makeTitleSlide("Заголовок", "amirai.online") : this.makeGridSlide();
             this.slides.push(s);
             this.current = this.slides.length - 1;
+            this.ensureValidTab();
             this.$nextTick(() => this.fitStage());
         },
 
@@ -806,6 +912,7 @@ function editor() {
             }
             this.slides.splice(i, 1);
             this.current = Math.max(0, Math.min(this.current, this.slides.length - 1));
+            this.ensureValidTab();
         },
 
         moveSlide(i, dir) {
@@ -815,12 +922,14 @@ function editor() {
             this.slides[i] = this.slides[j];
             this.slides[j] = tmp;
             this.current = j;
+            this.ensureValidTab();
         },
 
         selectSlide(i) {
             this.current = i;
             this.selectedCardUid = null;
             this.selectedCardUids = [];
+            this.ensureValidTab();
         },
 
         // ---- экспорт ----
@@ -840,6 +949,7 @@ function editor() {
             const savedArtSel = this.selectedArtUid;
             this.selectedCardUid = null;
             this.selectedArtUid = null;
+            const files = [];
             try {
                 await document.fonts.ready;
                 for (let k = 0; k < indices.length; k++) {
@@ -856,10 +966,12 @@ function editor() {
 
                     const { w, h } = this.dims;
                     const dataUrl = await this.renderSlideToPng(w, h);
-                    this.downloadDataUrl(dataUrl, `amirai-${this.format.replace(":", "x")}-${i + 1}.png`);
+                    files.push({ dataUrl, filename: `amirai-${this.format.replace(":", "x")}-${i + 1}.png` });
                     await new Promise((r) => setTimeout(r, 120));
                 }
-                this.toast = "Готово! Картинки сохранены в загрузки.";
+                this.toast = "Сохранение…";
+                await this.deliver(files);
+                this.toast = IS_NATIVE ? "Готово! Выбери, куда сохранить/отправить." : "Готово! Картинки сохранены в загрузки.";
             } catch (e) {
                 this.toast = "Ошибка экспорта: " + (e && e.message ? e.message : e);
                 console.error(e);
@@ -902,6 +1014,10 @@ function editor() {
                     height: h,
                     pixelRatio: 1,
                     cacheBust: false,
+                    // ВАЖНО: постеры идут через /api/image?url=… — путь у всех одинаковый,
+                    // отличается только query. Без этого флага html-to-image кэширует
+                    // картинку по пути (без query) и подставляет ОДИН постер во все карточки.
+                    includeQueryParams: true,
                 });
             } finally {
                 holder.remove();
@@ -933,6 +1049,37 @@ function editor() {
             });
             // editor-only элементы не нужны в экспорте
             root.querySelectorAll(".grid-overlay, .resize-handle, .marquee").forEach((n) => n.remove());
+        },
+
+        // Отдать готовые PNG: в вебе — скачать каждый файл; в нативе — записать
+        // во временную папку и показать системный «Поделиться» (Telegram, галерея…).
+        async deliver(files) {
+            if (!files.length) return;
+            if (IS_NATIVE) {
+                await this.saveNative(files);
+            } else {
+                files.forEach((f) => this.downloadDataUrl(f.dataUrl, f.filename));
+            }
+        },
+
+        async saveNative(files) {
+            const P = window.Capacitor.Plugins;
+            const Filesystem = P.Filesystem;
+            const Share = P.Share;
+            const uris = [];
+            for (const f of files) {
+                const res = await Filesystem.writeFile({
+                    path: f.filename,
+                    data: f.dataUrl.split(",")[1], // чистый base64
+                    directory: "CACHE",
+                });
+                uris.push(res.uri);
+            }
+            await Share.share({
+                title: "Подборка Amirai",
+                text: "Подборка аниме · amirai.online",
+                files: uris,
+            });
         },
 
         downloadDataUrl(dataUrl, filename) {

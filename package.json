@@ -1,0 +1,23 @@
+{
+  "name": "amirai-podborka",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Amirai — генератор подборок аниме (мобильное приложение)",
+  "scripts": {
+    "build:www": "node scripts/build-www.mjs",
+    "sync": "npm run build:www && cap sync android",
+    "open": "cap open android",
+    "apk": "npm run build:www && cap sync android && node scripts/build-apk.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/share": "^6.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "playwright": "^1.60.0"
+  }
+}

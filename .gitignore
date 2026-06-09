@@ -1,9 +1,19 @@
+# Python
 __pycache__/
 *.pyc
-node_modules/
-package.json
-package-lock.json
-server.log
-smoke_*.png
 .venv/
 venv/
+
+# Node / Capacitor (генерируется сборкой — в репозиторий не нужно)
+node_modules/
+www/
+dist/
+android/
+
+# runtime / build artifacts
+*.log
+smoke_*.png
+verify-export.png
+_verify.js
+_shot.js
+_export.js

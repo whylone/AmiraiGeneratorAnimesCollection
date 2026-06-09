@@ -1,0 +1,10 @@
+{
+  "appId": "online.amirai.podborka",
+  "appName": "Amirai Подборки",
+  "webDir": "www",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
